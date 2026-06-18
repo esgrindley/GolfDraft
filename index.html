@@ -427,24 +427,39 @@ async function fetchLiveScores() {
 
   try {
     // Use ESPN leaderboard API (public, no key needed)
-    const resp = await fetch('https://site.api.espn.com/apis/site/v2/sports/golf/pga/leaderboard?event=401725756');
+    const resp = await fetch('https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard?event=401811952');
     const data = await resp.json();
     const competitors = data?.events?.[0]?.competitions?.[0]?.competitors || [];
+
+    // Helper: pull score-to-par from the statistics array (score.value is total strokes, not to-par)
+    // Returns null for players who haven't started (status "pre") so they rank as TBD, not as leaders at E.
+    function toPar(c) {
+      const state = c.status?.type?.state;
+      if (state === 'pre') return null; // not teed off yet
+      const stat = (c.statistics || []).find(s => s.name === 'scoreToPar');
+      if (stat && stat.value !== undefined && stat.value !== null) return parseInt(stat.value);
+      return null;
+    }
+    // Helper: round score-to-par display (e.g. "+1", "E", "-2") from linescores
+    function roundDisp(linescores, i) {
+      const ls = linescores[i];
+      if (!ls) return '--';
+      return ls.displayValue ?? '--';
+    }
 
     // Build full-field array for the tournament top-10 view
     fullField = competitors.map(c => {
       const linescores = c.linescores || [];
       return {
         name: c.athlete?.displayName || 'Unknown',
-        scoreVal: c.score?.value ?? null,
-        scoreDisp: c.score?.displayValue ?? null,
+        scoreVal: toPar(c),
         pos: c.status?.position?.displayName || '--',
-        thru: (c.status?.thru ?? '--').toString(),
-        order: c.status?.position?.id ? parseInt(c.status.position.id) : 9999,
-        r1: linescores[0]?.value ?? '--',
-        r2: linescores[1]?.value ?? '--',
-        r3: linescores[2]?.value ?? '--',
-        r4: linescores[3]?.value ?? '--',
+        thru: (c.status?.displayThru ?? c.status?.thru ?? '--').toString(),
+        order: c.sortOrder ?? 9999,
+        r1: roundDisp(linescores, 0),
+        r2: roundDisp(linescores, 1),
+        r3: roundDisp(linescores, 2),
+        r4: roundDisp(linescores, 3),
       };
     });
 
@@ -459,18 +474,15 @@ async function fetchLiveScores() {
       });
       if (match) {
         matched++;
-        const scoreVal = c.score?.value ?? null;
-        const pos = c.status?.position?.displayName || '--';
-        const thru = c.status?.thru || '--';
         const linescores = c.linescores || [];
         scores[match] = {
-          score: scoreVal !== null ? parseInt(scoreVal) : null,
-          pos: pos,
-          thru: thru.toString(),
-          r1: linescores[0]?.value ?? '--',
-          r2: linescores[1]?.value ?? '--',
-          r3: linescores[2]?.value ?? '--',
-          r4: linescores[3]?.value ?? '--',
+          score: toPar(c),
+          pos: c.status?.position?.displayName || '--',
+          thru: (c.status?.displayThru ?? c.status?.thru ?? '--').toString(),
+          r1: roundDisp(linescores, 0),
+          r2: roundDisp(linescores, 1),
+          r3: roundDisp(linescores, 2),
+          r4: roundDisp(linescores, 3),
         };
       }
     });
