@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2026 US Open Fantasy Tracker</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a2e1a; color: #e8f5e9; min-height: 100vh; padding: 12px; }
+  h1 { text-align: center; font-size: 1.3rem; color: #a5d6a7; margin-bottom: 2px; letter-spacing: 1px; text-transform: uppercase; }
+  .subtitle { text-align: center; font-size: 0.72rem; color: #66bb6a; margin-bottom: 4px; }
+  .last-update { text-align: center; font-size: 0.68rem; color: #2d6a4f; margin-bottom: 12px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; max-width: 960px; margin-left: auto; margin-right: auto; }
+  .tab { flex: 1; padding: 8px; border-radius: 7px; border: 1px solid #2d6a4f; background: #143125; color: #74c69d; font-size: 0.78rem; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.15s; }
+  .tab.active { background: #52b788; color: #0a2e1a; border-color: #52b788; }
+
+  .view { display: none; max-width: 960px; margin: 0 auto; }
+  .view.active { display: block; }
+
+  /* Standings */
+  .standings { display: flex; flex-direction: column; gap: 8px; }
+  .team-card { background: #1b4332; border: 1px solid #2d6a4f; border-radius: 10px; padding: 12px; position: relative; overflow: hidden; }
+  .team-card.leader { border-color: #d4af37; background: #1e3d20; }
+  .team-card.you { border-color: #52b788; }
+  .team-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .team-rank { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 800; flex-shrink: 0; }
+  .rank-1 { background: #d4af37; color: #0a2e1a; }
+  .rank-2 { background: #aaa; color: #0a2e1a; }
+  .rank-3 { background: #8B4513; color: #fff; }
+  .rank-other { background: #2d6a4f; color: #95d5b2; }
+  .team-name { font-size: 1rem; font-weight: 700; color: #b7e4c7; flex: 1; }
+  .team-you-badge { font-size: 0.6rem; background: #52b788; color: #0a2e1a; padding: 2px 6px; border-radius: 3px; font-weight: 700; }
+  .team-best { font-size: 0.9rem; font-weight: 800; }
+  .score-under { color: #52b788; }
+  .score-over { color: #e57373; }
+  .score-even { color: #b7e4c7; }
+  .score-tbd { color: #2d6a4f; }
+  .best-label { font-size: 0.6rem; color: #74c69d; text-align: right; }
+  .golfers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .golfer-slot { background: #143125; border-radius: 6px; padding: 7px 8px; border: 1px solid #2d6a4f; }
+  .golfer-slot.best-score { border-color: #52b788; background: #1a5c35; }
+  .golfer-name { font-size: 0.75rem; font-weight: 600; color: #d8f3dc; }
+  .golfer-score { font-size: 0.82rem; font-weight: 800; margin-top: 2px; }
+  .golfer-pos { font-size: 0.62rem; color: #74c69d; margin-top: 1px; }
+  .golfer-thru { font-size: 0.6rem; color: #52b788; }
+
+  /* Leaderboard */
+  .leaderboard-table { width: 100%; border-collapse: collapse; }
+  .leaderboard-table th { background: #143125; color: #69b578; font-size: 0.72rem; padding: 7px 8px; text-align: left; border-bottom: 1px solid #2d6a4f; }
+  .leaderboard-table td { padding: 7px 8px; font-size: 0.78rem; border-bottom: 1px solid #143125; }
+  .leaderboard-table tr:hover td { background: #1a5c35; }
+  .leaderboard-table tr.fantasy-pick td { background: #143125; }
+  .leaderboard-table tr.fantasy-pick.your-pick td { background: #0f3d22; }
+  .owner-badge { font-size: 0.6rem; padding: 1px 5px; border-radius: 3px; font-weight: 700; margin-left: 5px; }
+  .owner-you { background: #52b788; color: #0a2e1a; }
+  .owner-other { background: #2d6a4f; color: #95d5b2; }
+
+  /* Controls */
+  .controls { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+  .refresh-btn { background: #52b788; color: #0a2e1a; border: none; border-radius: 6px; padding: 7px 14px; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+  .refresh-btn:hover { background: #74c69d; }
+  .refresh-btn:disabled { background: #2d6a4f; color: #52b788; cursor: not-allowed; }
+  .status-pill { font-size: 0.68rem; padding: 4px 10px; border-radius: 20px; background: #143125; border: 1px solid #2d6a4f; color: #74c69d; }
+  .status-pill.live { border-color: #52b788; color: #52b788; }
+  .manual-section { background: #1b4332; border: 1px solid #2d6a4f; border-radius: 10px; padding: 12px; margin-top: 10px; }
+  .manual-section h3 { font-size: 0.78rem; color: #69b578; margin-bottom: 8px; }
+  .manual-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
+  .manual-row { display: flex; flex-direction: column; gap: 3px; }
+  .manual-label { font-size: 0.65rem; color: #74c69d; }
+  .manual-inputs { display: flex; gap: 4px; }
+  .manual-input { background: #0a2e1a; border: 1px solid #2d6a4f; color: #e8f5e9; border-radius: 4px; padding: 4px 6px; font-size: 0.72rem; width: 100%; }
+  .manual-input:focus { outline: none; border-color: #52b788; }
+  .score-input { width: 55px !important; }
+  .pos-input { width: 45px !important; }
+  .save-all-btn { background: #52b788; color: #0a2e1a; border: none; border-radius: 6px; padding: 8px; font-size: 0.78rem; font-weight: 700; cursor: pointer; width: 100%; margin-top: 8px; }
+  .winner-banner { background: linear-gradient(135deg, #d4af37, #f0c940); color: #0a2e1a; border-radius: 10px; padding: 14px; text-align: center; margin-bottom: 12px; }
+  .winner-banner h2 { font-size: 1.1rem; font-weight: 800; }
+  .winner-banner p { font-size: 0.8rem; margin-top: 4px; }
+
+  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: #0a2e1a; } ::-webkit-scrollbar-thumb { background: #2d6a4f; border-radius: 2px; }
+  @media (max-width: 500px) { .golfers { grid-template-columns: 1fr 1fr; } .manual-grid { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<h1>⛳ 2026 US Open Fantasy</h1>
+<p class="subtitle">Shinnecock Hills · June 18–21, 2026 · Winner Takes All</p>
+<p class="last-update" id="lastUpdate">Scores not yet loaded</p>
+
+<div class="tabs">
+  <div class="tab active" onclick="showView('standings')">🏆 Standings</div>
+  <div class="tab" onclick="showView('leaderboard')">📊 Leaderboard</div>
+  <div class="tab" onclick="showView('scores')">✏️ Enter Scores</div>
+</div>
+
+<div class="view active" id="view-standings">
+  <div id="winnerBanner"></div>
+  <div class="standings" id="standings"></div>
+</div>
+
+<div class="view" id="view-leaderboard">
+  <div class="controls">
+    <button class="refresh-btn" onclick="fetchLiveScores()" id="refreshBtn">🔄 Refresh Scores</button>
+    <div class="status-pill" id="statusPill">Manual entry mode</div>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="leaderboard-table" id="leaderboardTable">
+      <thead><tr><th>Pos</th><th>Player</th><th>Score</th><th>Thru</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th></tr></thead>
+      <tbody id="leaderboardBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="view" id="view-scores">
+  <div class="manual-section">
+    <h3>✏️ Enter Scores Manually — update anytime during the tournament</h3>
+    <div class="manual-grid" id="manualGrid"></div>
+    <button class="save-all-btn" onclick="saveManualScores()">💾 Save & Update Standings</button>
+  </div>
+</div>
+
+<script>
+// ─── Teams ─────────────────────────────────────────────────────
+const TEAMS = [
+  { name: "Eric",  you: true,  golfers: ["Scottie Scheffler", "Viktor Hovland", "Patrick Cantlay"] },
+  { name: "Joe",               golfers: ["Rory McIlroy", "Collin Morikawa", "Min Woo Lee"] },
+  { name: "Paul",              golfers: ["Xander Schauffele", "Bryson DeChambeau", "Sam Burns"] },
+  { name: "JB",                golfers: ["Wyndham Clark", "Tyrrell Hatton", "Shane Lowry"] },
+  { name: "Chris",             golfers: ["Jon Rahm", "Tommy Fleetwood", "Justin Rose"] },
+  { name: "Bryan",             golfers: ["Cam Young", "Justin Thomas", "Aaron Rai"] },
+  { name: "Josh",              golfers: ["Ludvig Åberg", "Matt Fitzpatrick", "Chris Gotterup"] },
+];
+
+// All golfers flat
+const ALL_GOLFERS = [...new Set(TEAMS.flatMap(t => t.golfers))];
+
+// ─── Score State ───────────────────────────────────────────────
+// scores[name] = { score: number|null, pos: string, thru: string, r1,r2,r3,r4 }
+let scores = {};
+ALL_GOLFERS.forEach(g => {
+  scores[g] = { score: null, pos: "--", thru: "--", r1: "--", r2: "--", r3: "--", r4: "--" };
+});
+
+// Try load saved scores from localStorage
+function loadSaved() {
+  try {
+    const saved = localStorage.getItem('usopen2026_scores');
+    if (saved) scores = { ...scores, ...JSON.parse(saved) };
+  } catch(e) {}
+}
+loadSaved();
+
+// ─── Helpers ───────────────────────────────────────────────────
+function fmtScore(s) {
+  if (s === null || s === undefined) return { txt: "TBD", cls: "score-tbd" };
+  if (s === 0) return { txt: "E", cls: "score-even" };
+  if (s < 0) return { txt: s.toString(), cls: "score-under" };
+  return { txt: "+" + s, cls: "score-over" };
+}
+
+function getBestScore(team) {
+  let best = null;
+  let bestGolfer = null;
+  team.golfers.forEach(g => {
+    const sc = scores[g]?.score;
+    if (sc !== null && sc !== undefined) {
+      if (best === null || sc < best) { best = sc; bestGolfer = g; }
+    }
+  });
+  return { best, bestGolfer };
+}
+
+function rankTeams() {
+  const ranked = TEAMS.map(t => {
+    const { best, bestGolfer } = getBestScore(t);
+    return { ...t, best, bestGolfer };
+  });
+  ranked.sort((a, b) => {
+    if (a.best === null && b.best === null) return 0;
+    if (a.best === null) return 1;
+    if (b.best === null) return -1;
+    return a.best - b.best;
+  });
+  return ranked;
+}
+
+function ownerOf(golferName) {
+  const team = TEAMS.find(t => t.golfers.includes(golferName));
+  return team || null;
+}
+
+// ─── Views ─────────────────────────────────────────────────────
+function showView(v) {
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('view-' + v).classList.add('active');
+  const tabs = { standings: 0, leaderboard: 1, scores: 2 };
+  document.querySelectorAll('.tab')[tabs[v]].classList.add('active');
+  if (v === 'scores') renderManualGrid();
+}
+
+// ─── Standings View ────────────────────────────────────────────
+function renderStandings() {
+  const ranked = rankTeams();
+  const banner = document.getElementById('winnerBanner');
+  const container = document.getElementById('standings');
+
+  // Winner banner if scores exist
+  const hasScores = Object.values(scores).some(s => s.score !== null);
+  if (hasScores && ranked[0].best !== null) {
+    const leader = ranked[0];
+    const { txt } = fmtScore(leader.best);
+    banner.innerHTML = `<div class="winner-banner"><h2>🥇 Current Leader: ${leader.name}</h2><p>Best score: ${txt} (${leader.bestGolfer})</p></div>`;
+  } else {
+    banner.innerHTML = '';
+  }
+
+  container.innerHTML = '';
+  ranked.forEach((team, idx) => {
+    const card = document.createElement('div');
+    card.className = 'team-card' + (idx === 0 && team.best !== null ? ' leader' : '') + (team.you ? ' you' : '');
+
+    const rankClass = idx === 0 ? 'rank-1' : idx === 1 ? 'rank-2' : idx === 2 ? 'rank-3' : 'rank-other';
+    const { best, bestGolfer } = getBestScore(team);
+    const { txt, cls } = fmtScore(best);
+
+    card.innerHTML = `
+      <div class="team-header">
+        <div class="team-rank ${rankClass}">${idx + 1}</div>
+        <div class="team-name">${team.name} ${team.you ? '<span class="team-you-badge">YOU</span>' : ''}</div>
+        <div style="text-align:right">
+          <div class="team-best ${cls}">${txt}</div>
+          <div class="best-label">${bestGolfer ? 'via ' + bestGolfer.split(' ').pop() : 'best score'}</div>
+        </div>
+      </div>
+      <div class="golfers" id="golfers-${team.name}"></div>`;
+
+    container.appendChild(card);
+
+    const gContainer = document.getElementById('golfers-' + team.name);
+    team.golfers.forEach(g => {
+      const sc = scores[g];
+      const isBest = g === bestGolfer;
+      const { txt: stxt, cls: scls } = fmtScore(sc?.score ?? null);
+      const slot = document.createElement('div');
+      slot.className = 'golfer-slot' + (isBest ? ' best-score' : '');
+      slot.innerHTML = `
+        <div class="golfer-name">${g.split(' ').pop()}</div>
+        <div class="golfer-score ${scls}">${stxt}</div>
+        <div class="golfer-pos">${sc?.pos || '--'} ${isBest ? '⭐' : ''}</div>
+        <div class="golfer-thru">${sc?.thru ? 'Thru ' + sc.thru : ''}</div>`;
+      gContainer.appendChild(slot);
+    });
+  });
+}
+
+// ─── Leaderboard View ──────────────────────────────────────────
+function renderLeaderboard() {
+  const tbody = document.getElementById('leaderboardBody');
+  tbody.innerHTML = '';
+
+  // Sort golfers by score
+  const sorted = ALL_GOLFERS.map(g => ({ name: g, ...scores[g] }))
+    .sort((a, b) => {
+      if (a.score === null && b.score === null) return 0;
+      if (a.score === null) return 1;
+      if (b.score === null) return -1;
+      return a.score - b.score;
+    });
+
+  sorted.forEach((g, idx) => {
+    const owner = ownerOf(g.name);
+    const isYours = owner?.you;
+    const { txt, cls } = fmtScore(g.score);
+    const tr = document.createElement('tr');
+    tr.className = 'fantasy-pick' + (isYours ? ' your-pick' : '');
+    tr.innerHTML = `
+      <td>${g.score !== null ? idx + 1 : '--'}</td>
+      <td>${g.name} ${owner ? `<span class="owner-badge ${isYours ? 'owner-you' : 'owner-other'}">${owner.name}</span>` : ''}</td>
+      <td class="${cls}">${txt}</td>
+      <td>${g.thru || '--'}</td>
+      <td>${g.r1 || '--'}</td>
+      <td>${g.r2 || '--'}</td>
+      <td>${g.r3 || '--'}</td>
+      <td>${g.r4 || '--'}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// ─── Manual Score Entry ────────────────────────────────────────
+function renderManualGrid() {
+  const grid = document.getElementById('manualGrid');
+  grid.innerHTML = '';
+  ALL_GOLFERS.forEach(g => {
+    const sc = scores[g];
+    const owner = ownerOf(g);
+    const row = document.createElement('div');
+    row.className = 'manual-row';
+    row.innerHTML = `
+      <div class="manual-label">${g} <span style="color:#52b788">(${owner?.name})</span></div>
+      <div class="manual-inputs">
+        <input class="manual-input score-input" type="number" id="sc_${g.replace(/\s/g,'_')}" placeholder="Score" value="${sc.score !== null ? sc.score : ''}" title="Score vs par (e.g. -5, 0, +3)">
+        <input class="manual-input pos-input" type="text" id="pos_${g.replace(/\s/g,'_')}" placeholder="Pos" value="${sc.pos !== '--' ? sc.pos : ''}" title="Position (e.g. T3)">
+        <input class="manual-input pos-input" type="text" id="thru_${g.replace(/\s/g,'_')}" placeholder="Thru" value="${sc.thru !== '--' ? sc.thru : ''}" title="Holes completed">
+      </div>`;
+    grid.appendChild(row);
+  });
+}
+
+function saveManualScores() {
+  ALL_GOLFERS.forEach(g => {
+    const key = g.replace(/\s/g,'_');
+    const scEl = document.getElementById('sc_' + key);
+    const posEl = document.getElementById('pos_' + key);
+    const thruEl = document.getElementById('thru_' + key);
+    if (!scEl) return;
+    const scVal = scEl.value.trim();
+    scores[g] = {
+      ...scores[g],
+      score: scVal !== '' ? parseInt(scVal) : null,
+      pos: posEl?.value.trim() || '--',
+      thru: thruEl?.value.trim() || '--',
+    };
+  });
+  try { localStorage.setItem('usopen2026_scores', JSON.stringify(scores)); } catch(e) {}
+  document.getElementById('lastUpdate').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+  renderStandings();
+  renderLeaderboard();
+  showView('standings');
+}
+
+// ─── Live Score Fetch ──────────────────────────────────────────
+async function fetchLiveScores() {
+  const btn = document.getElementById('refreshBtn');
+  const pill = document.getElementById('statusPill');
+  btn.disabled = true;
+  btn.textContent = '⏳ Fetching...';
+  pill.textContent = 'Fetching live data...';
+  pill.className = 'status-pill';
+
+  try {
+    // Use ESPN leaderboard API (public, no key needed)
+    const resp = await fetch('https://site.api.espn.com/apis/site/v2/sports/golf/pga/leaderboard?event=401725756');
+    const data = await resp.json();
+    const competitors = data?.events?.[0]?.competitions?.[0]?.competitors || [];
+
+    let matched = 0;
+    competitors.forEach(c => {
+      const fullName = c.athlete?.displayName || '';
+      // Try to match to our golfers
+      const match = ALL_GOLFERS.find(g => {
+        const gParts = g.toLowerCase().split(' ');
+        const cParts = fullName.toLowerCase().split(' ');
+        return gParts.some(p => cParts.includes(p) && p.length > 3);
+      });
+      if (match) {
+        matched++;
+        const scoreVal = c.score?.value ?? null;
+        const pos = c.status?.position?.displayName || '--';
+        const thru = c.status?.thru || '--';
+        const linescores = c.linescores || [];
+        scores[match] = {
+          score: scoreVal !== null ? parseInt(scoreVal) : null,
+          pos: pos,
+          thru: thru.toString(),
+          r1: linescores[0]?.value ?? '--',
+          r2: linescores[1]?.value ?? '--',
+          r3: linescores[2]?.value ?? '--',
+          r4: linescores[3]?.value ?? '--',
+        };
+      }
+    });
+
+    try { localStorage.setItem('usopen2026_scores', JSON.stringify(scores)); } catch(e) {}
+    document.getElementById('lastUpdate').textContent = 'Live update: ' + new Date().toLocaleTimeString() + ' · ' + matched + ' players matched';
+    pill.textContent = '🟢 Live · ' + matched + ' matched';
+    pill.className = 'status-pill live';
+    renderStandings();
+    renderLeaderboard();
+  } catch(e) {
+    pill.textContent = '⚠️ Live fetch failed — use manual entry';
+    pill.className = 'status-pill';
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🔄 Refresh Scores';
+}
+
+// Auto-refresh every 5 min if tab is visible
+setInterval(() => {
+  if (!document.hidden) fetchLiveScores();
+}, 5 * 60 * 1000);
+
+// ─── Init ──────────────────────────────────────────────────────
+renderStandings();
+renderLeaderboard();
+</script>
+</body>
+</html>
