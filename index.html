@@ -86,6 +86,21 @@
   .golfer-name.clickable:hover { color: #52b788; text-decoration: underline; }
   .lb-name.clickable:hover { color: #52b788; text-decoration: underline; }
   .link-icon { font-size: 0.6rem; color: #52b788; opacity: 0.7; }
+
+  /* Scrolling Ticker */
+  .ticker-wrap { max-width: 960px; margin: 0 auto 12px; background: #143125; border: 1px solid #2d6a4f; border-radius: 8px; overflow: hidden; position: relative; white-space: nowrap; }
+  .ticker-track { display: inline-block; white-space: nowrap; padding: 7px 0; will-change: transform; animation: ticker-scroll 40s linear infinite; }
+  .ticker-wrap:hover .ticker-track { animation-play-state: paused; }
+  .ticker-item { display: inline-block; padding: 0 14px; font-size: 0.76rem; border-right: 1px solid #2d6a4f; }
+  .ticker-pos { color: #d4af37; font-weight: 700; margin-right: 5px; }
+  .ticker-name { color: #d8f3dc; font-weight: 600; }
+  .ticker-score { font-weight: 800; margin-left: 6px; }
+  .ticker-owner { color: #52b788; font-size: 0.64rem; margin-left: 5px; }
+  .ticker-empty { display: inline-block; padding: 0 14px; font-size: 0.74rem; color: #74c69d; }
+  @keyframes ticker-scroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
 </style>
 </head>
 <body>
@@ -93,9 +108,14 @@
 <p class="subtitle">Shinnecock Hills · June 18–21, 2026 · Winner Takes All</p>
 <p class="last-update" id="lastUpdate">Scores not yet loaded</p>
 
+<div class="ticker-wrap" id="tickerWrap">
+  <div class="ticker-track" id="tickerTrack"><span class="ticker-empty">⛳ Live top 10 will scroll here once the tournament begins — hit Refresh</span></div>
+</div>
+
 <div class="tabs">
   <div class="tab active" onclick="showView('standings')">🏆 Standings</div>
-  <div class="tab" onclick="showView('leaderboard')">📊 Leaderboard</div>
+  <div class="tab" onclick="showView('leaderboard')">📊 My Picks</div>
+  <div class="tab" onclick="showView('tournament')">🌍 Top 10</div>
   <div class="tab" onclick="showView('scores')">✏️ Enter Scores</div>
 </div>
 
@@ -113,6 +133,20 @@
     <table class="leaderboard-table" id="leaderboardTable">
       <thead><tr><th>Pos</th><th>Player</th><th>Score</th><th>Thru</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th></tr></thead>
       <tbody id="leaderboardBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="view" id="view-tournament">
+  <div class="controls">
+    <button class="refresh-btn" onclick="fetchLiveScores()" id="refreshBtnT">🔄 Refresh</button>
+    <div class="status-pill" id="statusPillT">Tap refresh during the tournament</div>
+  </div>
+  <p style="font-size:0.7rem;color:#74c69d;margin-bottom:8px;">Full-field top 10 from the live US Open leaderboard. Golfers owned by a fantasy team are tagged.</p>
+  <div style="overflow-x:auto">
+    <table class="leaderboard-table" id="tournamentTable">
+      <thead><tr><th>Pos</th><th>Player</th><th>Score</th><th>Thru</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th></tr></thead>
+      <tbody id="tournamentBody"><tr><td colspan="8" style="text-align:center;color:#2d6a4f;padding:18px;">No data yet — hit Refresh once the tournament is underway.</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -184,6 +218,8 @@ ALL_GOLFERS.forEach(g => {
   scores[g] = { score: null, pos: "--", thru: "--", r1: "--", r2: "--", r3: "--", r4: "--" };
 });
 
+let fullField = []; // top-of-field data from ESPN for the tournament view
+
 // Try load saved scores from localStorage
 function loadSaved() {
   try {
@@ -237,7 +273,7 @@ function showView(v) {
   document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
   document.getElementById('view-' + v).classList.add('active');
-  const tabs = { standings: 0, leaderboard: 1, scores: 2 };
+  const tabs = { standings: 0, leaderboard: 1, tournament: 2, scores: 3 };
   document.querySelectorAll('.tab')[tabs[v]].classList.add('active');
   if (v === 'scores') renderManualGrid();
 }
@@ -395,6 +431,23 @@ async function fetchLiveScores() {
     const data = await resp.json();
     const competitors = data?.events?.[0]?.competitions?.[0]?.competitors || [];
 
+    // Build full-field array for the tournament top-10 view
+    fullField = competitors.map(c => {
+      const linescores = c.linescores || [];
+      return {
+        name: c.athlete?.displayName || 'Unknown',
+        scoreVal: c.score?.value ?? null,
+        scoreDisp: c.score?.displayValue ?? null,
+        pos: c.status?.position?.displayName || '--',
+        thru: (c.status?.thru ?? '--').toString(),
+        order: c.status?.position?.id ? parseInt(c.status.position.id) : 9999,
+        r1: linescores[0]?.value ?? '--',
+        r2: linescores[1]?.value ?? '--',
+        r3: linescores[2]?.value ?? '--',
+        r4: linescores[3]?.value ?? '--',
+      };
+    });
+
     let matched = 0;
     competitors.forEach(c => {
       const fullName = c.athlete?.displayName || '';
@@ -426,15 +479,23 @@ async function fetchLiveScores() {
     document.getElementById('lastUpdate').textContent = 'Live update: ' + new Date().toLocaleTimeString() + ' · ' + matched + ' players matched';
     pill.textContent = '🟢 Live · ' + matched + ' matched';
     pill.className = 'status-pill live';
+    const pillT = document.getElementById('statusPillT');
+    if (pillT) { pillT.textContent = '🟢 Live · updated ' + new Date().toLocaleTimeString(); pillT.className = 'status-pill live'; }
     renderStandings();
     renderLeaderboard();
+    renderTournament();
+    renderTicker();
   } catch(e) {
     pill.textContent = '⚠️ Live fetch failed — use manual entry';
     pill.className = 'status-pill';
+    const pillT = document.getElementById('statusPillT');
+    if (pillT) pillT.textContent = '⚠️ Live fetch failed — try again';
   }
 
   btn.disabled = false;
   btn.textContent = '🔄 Refresh Scores';
+  const btnT = document.getElementById('refreshBtnT');
+  if (btnT) { btnT.disabled = false; btnT.textContent = '🔄 Refresh'; }
 }
 
 // Auto-refresh every 5 min if tab is visible
@@ -442,9 +503,87 @@ setInterval(() => {
   if (!document.hidden) fetchLiveScores();
 }, 5 * 60 * 1000);
 
+// ─── Scrolling Ticker ──────────────────────────────────────────
+function renderTicker() {
+  const track = document.getElementById('tickerTrack');
+  if (!track) return;
+  if (!fullField.length) return;
+
+  const sorted = [...fullField].sort((a, b) => {
+    if (a.scoreVal === null && b.scoreVal === null) return 0;
+    if (a.scoreVal === null) return 1;
+    if (b.scoreVal === null) return -1;
+    return a.scoreVal - b.scoreVal;
+  });
+  const top = sorted.slice(0, 10);
+  if (!top.length) return;
+
+  const itemHtml = top.map((g, idx) => {
+    let scTxt, scCls;
+    if (g.scoreVal === null) { scTxt = '--'; scCls = 'score-tbd'; }
+    else if (g.scoreVal === 0) { scTxt = 'E'; scCls = 'score-even'; }
+    else if (g.scoreVal < 0) { scTxt = g.scoreVal.toString(); scCls = 'score-under'; }
+    else { scTxt = '+' + g.scoreVal; scCls = 'score-over'; }
+    const owner = ownerOf(g.name);
+    const ownerTag = owner ? `<span class="ticker-owner">(${owner.name})</span>` : '';
+    return `<span class="ticker-item"><span class="ticker-pos">${g.pos || (idx+1)}</span><span class="ticker-name">${g.name}</span><span class="ticker-score ${scCls}">${scTxt}</span>${ownerTag}</span>`;
+  }).join('');
+
+  // Duplicate the run so the -50% loop is seamless
+  track.innerHTML = itemHtml + itemHtml;
+}
+
+// ─── Tournament Top 10 View ────────────────────────────────────
+function renderTournament() {
+  const tbody = document.getElementById('tournamentBody');
+  if (!tbody) return;
+  if (!fullField.length) return;
+
+  // Sort by score (nulls last), take top 10 — but include ties at the 10th score
+  const sorted = [...fullField].sort((a, b) => {
+    if (a.scoreVal === null && b.scoreVal === null) return 0;
+    if (a.scoreVal === null) return 1;
+    if (b.scoreVal === null) return -1;
+    return a.scoreVal - b.scoreVal;
+  });
+
+  const top = sorted.slice(0, 10);
+  tbody.innerHTML = '';
+  top.forEach((g, idx) => {
+    const owner = ownerOf(g.name);
+    const isYours = owner?.you;
+    let scTxt, scCls;
+    if (g.scoreVal === null) { scTxt = '--'; scCls = 'score-tbd'; }
+    else if (g.scoreVal === 0) { scTxt = 'E'; scCls = 'score-even'; }
+    else if (g.scoreVal < 0) { scTxt = g.scoreVal.toString(); scCls = 'score-under'; }
+    else { scTxt = '+' + g.scoreVal; scCls = 'score-over'; }
+
+    const hasProfile = !!profileUrl(g.name);
+    const nameCell = hasProfile
+      ? `<span class="lb-name clickable" onclick="openProfile('${g.name.replace(/'/g,"\\'")}')">${g.name} <span class="link-icon">↗</span></span>`
+      : `<span>${g.name}</span>`;
+    const ownerTag = owner ? `<span class="owner-badge ${isYours ? 'owner-you' : 'owner-other'}">${owner.name}</span>` : '';
+
+    const tr = document.createElement('tr');
+    if (owner) tr.className = 'fantasy-pick' + (isYours ? ' your-pick' : '');
+    tr.innerHTML = `
+      <td>${g.pos || (idx + 1)}</td>
+      <td>${nameCell} ${ownerTag}</td>
+      <td class="${scCls}">${scTxt}</td>
+      <td>${g.thru || '--'}</td>
+      <td>${g.r1 || '--'}</td>
+      <td>${g.r2 || '--'}</td>
+      <td>${g.r3 || '--'}</td>
+      <td>${g.r4 || '--'}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
 // ─── Init ──────────────────────────────────────────────────────
 renderStandings();
 renderLeaderboard();
+renderTournament();
+renderTicker();
 </script>
 </body>
 </html>
