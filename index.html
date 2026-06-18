@@ -464,14 +464,26 @@ async function fetchLiveScores() {
     });
 
     let matched = 0;
+    // Pre-compute how many competitors share each last name, so the fallback
+    // only fires when a last name is unambiguous in the field (avoids e.g. 3 "Lee"s).
+    const lastNameCounts = {};
     competitors.forEach(c => {
-      const fullName = c.athlete?.displayName || '';
-      // Try to match to our golfers
-      const match = ALL_GOLFERS.find(g => {
-        const gParts = g.toLowerCase().split(' ');
-        const cParts = fullName.toLowerCase().split(' ');
-        return gParts.some(p => cParts.includes(p) && p.length > 3);
-      });
+      const ln = (c.athlete?.displayName || '').trim().toLowerCase().split(' ').pop();
+      if (ln) lastNameCounts[ln] = (lastNameCounts[ln] || 0) + 1;
+    });
+
+    competitors.forEach(c => {
+      const fullName = (c.athlete?.displayName || '').trim();
+      const fullLower = fullName.toLowerCase();
+      const cLast = fullLower.split(' ').pop();
+      // Match exactly on full name first (ESPN displayName matches our roster spellings).
+      let match = ALL_GOLFERS.find(g => g.toLowerCase() === fullLower);
+      // Fallback: match on last name ONLY if that last name is unique in the field
+      // AND unique among our roster (handles "Cameron Young" vs our "Cam Young").
+      if (!match && lastNameCounts[cLast] === 1) {
+        const rosterHits = ALL_GOLFERS.filter(g => g.toLowerCase().split(' ').pop() === cLast);
+        if (rosterHits.length === 1) match = rosterHits[0];
+      }
       if (match) {
         matched++;
         const linescores = c.linescores || [];
@@ -596,6 +608,14 @@ renderStandings();
 renderLeaderboard();
 renderTournament();
 renderTicker();
+
+// Auto-fetch live scores as soon as the page loads, so it's never stale on open.
+fetchLiveScores();
+
+// Also re-fetch whenever the tab becomes visible again (e.g. switching back to it).
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) fetchLiveScores();
+});
 </script>
 </body>
 </html>
