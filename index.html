@@ -81,6 +81,11 @@
 
   ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: #0a2e1a; } ::-webkit-scrollbar-thumb { background: #2d6a4f; border-radius: 2px; }
   @media (max-width: 500px) { .golfers { grid-template-columns: 1fr 1fr; } .manual-grid { grid-template-columns: 1fr 1fr; } }
+  /* Clickable golfer names */
+  .clickable { cursor: pointer; }
+  .golfer-name.clickable:hover { color: #52b788; text-decoration: underline; }
+  .lb-name.clickable:hover { color: #52b788; text-decoration: underline; }
+  .link-icon { font-size: 0.6rem; color: #52b788; opacity: 0.7; }
 </style>
 </head>
 <body>
@@ -122,6 +127,32 @@
 
 <script>
 // ─── Teams ─────────────────────────────────────────────────────
+// Each golfer: name + US Open profile ID (the number in their usopen.com/players/<ID>.html URL)
+// Fill in the "id" values as you find them — any golfer with an id becomes clickable.
+const GOLFER_IDS = {
+  "Scottie Scheffler":  "46046",
+  "Viktor Hovland":     "46717",
+  "Patrick Cantlay":    "35450",
+  "Rory McIlroy":       "28237",
+  "Collin Morikawa":    "50525",
+  "Min Woo Lee":        "37378",
+  "Xander Schauffele":  "48081",
+  "Bryson DeChambeau":  "47959",
+  "Sam Burns":          "47504",
+  "Wyndham Clark":      "51766",
+  "Tyrrell Hatton":     "34363",
+  "Shane Lowry":        "33204",
+  "Jon Rahm":           "46970",
+  "Tommy Fleetwood":    "30911",
+  "Justin Rose":        "22405",
+  "Cam Young":          "57366",
+  "Justin Thomas":      "33448",
+  "Aaron Rai":          "46414",
+  "Ludvig Åberg":       "52955",
+  "Matt Fitzpatrick":   "40098",
+  "Chris Gotterup":     "59095",
+};
+
 const TEAMS = [
   { name: "Eric",  you: true,  golfers: ["Scottie Scheffler", "Viktor Hovland", "Patrick Cantlay"] },
   { name: "Joe",               golfers: ["Rory McIlroy", "Collin Morikawa", "Min Woo Lee"] },
@@ -134,6 +165,17 @@ const TEAMS = [
 
 // All golfers flat
 const ALL_GOLFERS = [...new Set(TEAMS.flatMap(t => t.golfers))];
+
+function profileUrl(name) {
+  const id = GOLFER_IDS[name];
+  return id ? `https://www.usopen.com/players/${id}.html` : null;
+}
+
+function openProfile(name) {
+  const url = profileUrl(name);
+  if (!url) return;
+  window.open(url, '_blank', 'noopener');
+}
 
 // ─── Score State ───────────────────────────────────────────────
 // scores[name] = { score: number|null, pos: string, thru: string, r1,r2,r3,r4 }
@@ -245,8 +287,12 @@ function renderStandings() {
       const { txt: stxt, cls: scls } = fmtScore(sc?.score ?? null);
       const slot = document.createElement('div');
       slot.className = 'golfer-slot' + (isBest ? ' best-score' : '');
+      const hasProfile = !!profileUrl(g);
+      const nameHtml = hasProfile
+        ? `<div class="golfer-name clickable" onclick="openProfile('${g.replace(/'/g,"\\'")}')">${g.split(' ').pop()} <span class="link-icon">↗</span></div>`
+        : `<div class="golfer-name">${g.split(' ').pop()}</div>`;
       slot.innerHTML = `
-        <div class="golfer-name">${g.split(' ').pop()}</div>
+        ${nameHtml}
         <div class="golfer-score ${scls}">${stxt}</div>
         <div class="golfer-pos">${sc?.pos || '--'} ${isBest ? '⭐' : ''}</div>
         <div class="golfer-thru">${sc?.thru ? 'Thru ' + sc.thru : ''}</div>`;
@@ -273,11 +319,15 @@ function renderLeaderboard() {
     const owner = ownerOf(g.name);
     const isYours = owner?.you;
     const { txt, cls } = fmtScore(g.score);
+    const hasProfile = !!profileUrl(g.name);
+    const nameCell = hasProfile
+      ? `<span class="lb-name clickable" onclick="openProfile('${g.name.replace(/'/g,"\\'")}')">${g.name} <span class="link-icon">↗</span></span>`
+      : `<span>${g.name}</span>`;
     const tr = document.createElement('tr');
     tr.className = 'fantasy-pick' + (isYours ? ' your-pick' : '');
     tr.innerHTML = `
       <td>${g.score !== null ? idx + 1 : '--'}</td>
-      <td>${g.name} ${owner ? `<span class="owner-badge ${isYours ? 'owner-you' : 'owner-other'}">${owner.name}</span>` : ''}</td>
+      <td>${nameCell} ${owner ? `<span class="owner-badge ${isYours ? 'owner-you' : 'owner-other'}">${owner.name}</span>` : ''}</td>
       <td class="${cls}">${txt}</td>
       <td>${g.thru || '--'}</td>
       <td>${g.r1 || '--'}</td>
