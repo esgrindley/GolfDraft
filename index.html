@@ -431,11 +431,32 @@ async function fetchLiveScores() {
     const data = await resp.json();
     const competitors = data?.events?.[0]?.competitions?.[0]?.competitors || [];
 
-    // Helper: pull score-to-par from the statistics array (score.value is total strokes, not to-par)
-    // Returns null for players who haven't started (status "pre") so they rank as TBD, not as leaders at E.
+    // If the response came back empty (network hiccup, ESPN blip), keep whatever
+    // we already have rather than blanking the ticker/board.
+    if (!competitors.length) {
+      const pillT0 = document.getElementById('statusPillT');
+      pill.textContent = '⚠️ No data returned — keeping last scores';
+      pill.className = 'status-pill';
+      if (pillT0) pillT0.textContent = '⚠️ No data — kept last scores';
+      btn.disabled = false; btn.textContent = '🔄 Refresh Scores';
+      const btnT0 = document.getElementById('refreshBtnT');
+      if (btnT0) { btnT0.disabled = false; btnT0.textContent = '🔄 Refresh'; }
+      return;
+    }
+
+    // Helper: pull tournament total score-to-par. score.value is total strokes, not to-par.
+    // A player is only "TBD" if they have NOT recorded any round score yet (truly hasn't
+    // started the tournament). Between rounds (e.g. finished R1, R2 not started) they are
+    // still "pre" for the current round but have a real total we must keep.
+    function hasStarted(c) {
+      const ls = c.linescores || [];
+      // Any linescore with an actual numeric value means at least one round is underway/done.
+      return ls.some(l => l && l.value !== undefined && l.value !== null && l.displayValue !== '-' && l.displayValue !== undefined && l.displayValue !== '');
+    }
     function toPar(c) {
       const state = c.status?.type?.state;
-      if (state === 'pre') return null; // not teed off yet
+      // Genuinely hasn't teed off in the whole tournament → TBD
+      if (state === 'pre' && !hasStarted(c)) return null;
       const stat = (c.statistics || []).find(s => s.name === 'scoreToPar');
       if (stat && stat.value !== undefined && stat.value !== null) return parseInt(stat.value);
       return null;
@@ -528,6 +549,7 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 // ─── Scrolling Ticker ──────────────────────────────────────────
+let lastTickerHtml = '';
 function renderTicker() {
   const track = document.getElementById('tickerTrack');
   if (!track) return;
@@ -552,6 +574,12 @@ function renderTicker() {
     const ownerTag = owner ? `<span class="ticker-owner">(${owner.name})</span>` : '';
     return `<span class="ticker-item"><span class="ticker-pos">${g.pos || (idx+1)}</span><span class="ticker-name">${g.name}</span><span class="ticker-score ${scCls}">${scTxt}</span>${ownerTag}</span>`;
   }).join('');
+
+  // Only touch the DOM when the content actually changed. Rewriting innerHTML
+  // restarts the CSS scroll animation (causing a visible blank/jump), so we skip
+  // it when scores are identical to the last render.
+  if (itemHtml === lastTickerHtml) return;
+  lastTickerHtml = itemHtml;
 
   // Duplicate the run so the -50% loop is seamless
   track.innerHTML = itemHtml + itemHtml;
