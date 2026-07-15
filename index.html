@@ -315,7 +315,7 @@ function renderStandings() {
         ${nameHtml}
         <div class="golfer-score ${scls}">${stxt}</div>
         <div class="golfer-pos">${sc?.pos || '--'} ${isBest ? '⭐' : ''}</div>
-        <div class="golfer-thru">${sc?.thru && sc.thru !== '--' ? 'Thru ' + sc.thru : (sc?.tee && sc.tee !== '--' ? sc.tee : '')}</div>`;
+        <div class="golfer-thru">${(sc?.thru && sc.thru !== '--' && sc.thru !== '0' && sc.thru !== 0) ? 'Thru ' + sc.thru : (sc?.tee && sc.tee !== '--' ? sc.tee : '')}</div>`;
       gContainer.appendChild(slot);
     });
   });
