@@ -411,12 +411,8 @@ async function fetchLiveScores() {
 
   try {
     // Use ESPN leaderboard API (public, no key needed)
-    // ⚠️ PLACEHOLDER EVENT ID — REPLACE BEFORE THE TOURNAMENT ⚠️
-    // Once ESPN posts the 2026 Open Championship, get the real ID from the URL on
-    // espn.com/golf/leaderboard (the "tournamentId=" number), or from the JSON at
-    // https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard (events[0].id).
-    // Then replace REPLACE_WITH_OPEN_EVENT_ID below with that number.
-    const EVENT_ID = 'REPLACE_WITH_OPEN_EVENT_ID';
+    // 2026 Open Championship ESPN event ID.
+    const EVENT_ID = '401811957';
     const resp = await fetch('https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard?event=' + EVENT_ID);
     const data = await resp.json();
     const competitors = data?.events?.[0]?.competitions?.[0]?.competitors || [];
