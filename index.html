@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>2026 US Open Fantasy Tracker</title>
+<title>2026 Open Championship Fantasy Tracker</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a2e1a; color: #e8f5e9; min-height: 100vh; padding: 12px; }
@@ -104,8 +104,8 @@
 </style>
 </head>
 <body>
-<h1>⛳ 2026 US Open Fantasy</h1>
-<p class="subtitle">Shinnecock Hills · June 18–21, 2026 · Winner Takes All</p>
+<h1>⛳ 2026 Open Championship Fantasy</h1>
+<p class="subtitle">Royal Birkdale · July 16–19, 2026 · Winner Takes All</p>
 <p class="last-update" id="lastUpdate">Scores not yet loaded</p>
 
 <div class="ticker-wrap" id="tickerWrap">
@@ -142,7 +142,7 @@
     <button class="refresh-btn" onclick="fetchLiveScores()" id="refreshBtnT">🔄 Refresh</button>
     <div class="status-pill" id="statusPillT">Tap refresh during the tournament</div>
   </div>
-  <p style="font-size:0.7rem;color:#74c69d;margin-bottom:8px;">Full-field top 10 from the live US Open leaderboard. Golfers owned by a fantasy team are tagged.</p>
+  <p style="font-size:0.7rem;color:#74c69d;margin-bottom:8px;">Full-field top 10 from the live Open Championship leaderboard. Golfers owned by a fantasy team are tagged.</p>
   <div style="overflow-x:auto">
     <table class="leaderboard-table" id="tournamentTable">
       <thead><tr><th>Pos</th><th>Player</th><th>Score</th><th>Thru</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th></tr></thead>
@@ -161,48 +161,32 @@
 
 <script>
 // ─── Teams ─────────────────────────────────────────────────────
-// Each golfer: name + US Open profile ID (the number in their usopen.com/players/<ID>.html URL)
-// Fill in the "id" values as you find them — any golfer with an id becomes clickable.
-const GOLFER_IDS = {
-  "Scottie Scheffler":  "46046",
-  "Viktor Hovland":     "46717",
-  "Patrick Cantlay":    "35450",
-  "Rory McIlroy":       "28237",
-  "Collin Morikawa":    "50525",
-  "Min Woo Lee":        "37378",
-  "Xander Schauffele":  "48081",
-  "Bryson DeChambeau":  "47959",
-  "Sam Burns":          "47504",
-  "Wyndham Clark":      "51766",
-  "Tyrrell Hatton":     "34363",
-  "Shane Lowry":        "33204",
-  "Jon Rahm":           "46970",
-  "Tommy Fleetwood":    "30911",
-  "Justin Rose":        "22405",
-  "Cam Young":          "57366",
-  "Justin Thomas":      "33448",
-  "Aaron Rai":          "46414",
-  "Ludvig Åberg":       "52955",
-  "Matt Fitzpatrick":   "40098",
-  "Chris Gotterup":     "59095",
-};
-
+// 2026 Open Championship draft. Replace the placeholder names below with your
+// actual picks after the draft. Names must match ESPN's spelling exactly
+// (e.g. "Cameron Young", not "Cam Young") for reliable matching — but the
+// last-name fallback will catch most minor differences automatically.
+//
+// Player profile links now come straight from ESPN (captured when scores load),
+// so there is NO id map to maintain anymore.
 const TEAMS = [
-  { name: "Eric",  you: true,  golfers: ["Scottie Scheffler", "Viktor Hovland", "Patrick Cantlay"] },
-  { name: "Joe",               golfers: ["Rory McIlroy", "Collin Morikawa", "Min Woo Lee"] },
-  { name: "Paul",              golfers: ["Xander Schauffele", "Bryson DeChambeau", "Sam Burns"] },
-  { name: "JB",                golfers: ["Wyndham Clark", "Tyrrell Hatton", "Shane Lowry"] },
-  { name: "Chris",             golfers: ["Jon Rahm", "Tommy Fleetwood", "Justin Rose"] },
-  { name: "Bryan",             golfers: ["Cam Young", "Justin Thomas", "Aaron Rai"] },
-  { name: "Josh",              golfers: ["Ludvig Åberg", "Matt Fitzpatrick", "Chris Gotterup"] },
+  { name: "Eric",  you: true,  golfers: ["Matt Fitzpatrick", "Chris Gotterup", "Viktor Hovland"] },
+  { name: "Joe",               golfers: ["Tommy Fleetwood", "Justin Rose", "Russell Henley"] },
+  { name: "Paul",              golfers: ["Scottie Scheffler", "Robert MacIntyre", "Shane Lowry"] },
+  { name: "JB",                golfers: ["Cameron Young", "Sam Burns", "Patrick Reed"] },
+  { name: "Chris",             golfers: ["Jon Rahm", "Ludvig Åberg", "Si Woo Kim"] },
+  { name: "Bryan",             golfers: ["Collin Morikawa", "Xander Schauffele", "Bryson DeChambeau"] },
+  { name: "Josh",              golfers: ["Rory McIlroy", "Tyrrell Hatton", "Wyndham Clark"] },
 ];
 
 // All golfers flat
 const ALL_GOLFERS = [...new Set(TEAMS.flatMap(t => t.golfers))];
 
+// ESPN player-card URLs, populated from the live API each fetch. Keyed by our
+// roster name → the athlete's espn.com player page.
+const PROFILE_URLS = {};
+
 function profileUrl(name) {
-  const id = GOLFER_IDS[name];
-  return id ? `https://www.usopen.com/players/${id}.html` : null;
+  return PROFILE_URLS[name] || null;
 }
 
 function openProfile(name) {
@@ -223,7 +207,7 @@ let fullField = []; // top-of-field data from ESPN for the tournament view
 // Try load saved scores from localStorage
 function loadSaved() {
   try {
-    const saved = localStorage.getItem('usopen2026_scores');
+    const saved = localStorage.getItem('theopen2026_scores');
     if (saved) scores = { ...scores, ...JSON.parse(saved) };
   } catch(e) {}
 }
@@ -409,7 +393,7 @@ function saveManualScores() {
       thru: thruEl?.value.trim() || '--',
     };
   });
-  try { localStorage.setItem('usopen2026_scores', JSON.stringify(scores)); } catch(e) {}
+  try { localStorage.setItem('theopen2026_scores', JSON.stringify(scores)); } catch(e) {}
   document.getElementById('lastUpdate').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
   renderStandings();
   renderLeaderboard();
@@ -427,7 +411,13 @@ async function fetchLiveScores() {
 
   try {
     // Use ESPN leaderboard API (public, no key needed)
-    const resp = await fetch('https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard?event=401811952');
+    // ⚠️ PLACEHOLDER EVENT ID — REPLACE BEFORE THE TOURNAMENT ⚠️
+    // Once ESPN posts the 2026 Open Championship, get the real ID from the URL on
+    // espn.com/golf/leaderboard (the "tournamentId=" number), or from the JSON at
+    // https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard (events[0].id).
+    // Then replace REPLACE_WITH_OPEN_EVENT_ID below with that number.
+    const EVENT_ID = 'REPLACE_WITH_OPEN_EVENT_ID';
+    const resp = await fetch('https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard?event=' + EVENT_ID);
     const data = await resp.json();
     const competitors = data?.events?.[0]?.competitions?.[0]?.competitors || [];
 
@@ -508,6 +498,10 @@ async function fetchLiveScores() {
       if (match) {
         matched++;
         const linescores = c.linescores || [];
+        // Capture the ESPN player-card link for this golfer (used by name clicks).
+        const espnLink = (c.athlete?.links || []).find(l => (l.rel || []).includes('playercard'))?.href
+                       || (c.athlete?.links || [])[0]?.href;
+        if (espnLink) PROFILE_URLS[match] = espnLink;
         scores[match] = {
           score: toPar(c),
           pos: c.status?.position?.displayName || '--',
@@ -520,7 +514,7 @@ async function fetchLiveScores() {
       }
     });
 
-    try { localStorage.setItem('usopen2026_scores', JSON.stringify(scores)); } catch(e) {}
+    try { localStorage.setItem('theopen2026_scores', JSON.stringify(scores)); } catch(e) {}
     document.getElementById('lastUpdate').textContent = 'Live update: ' + new Date().toLocaleTimeString() + ' · ' + matched + ' players matched';
     pill.textContent = '🟢 Live · ' + matched + ' matched';
     pill.className = 'status-pill live';
