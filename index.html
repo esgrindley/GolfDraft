@@ -131,7 +131,7 @@
   </div>
   <div style="overflow-x:auto">
     <table class="leaderboard-table" id="leaderboardTable">
-      <thead><tr><th>Pos</th><th>Player</th><th>Score</th><th>Thru</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th></tr></thead>
+      <thead><tr><th>Pos</th><th>Player</th><th>Score</th><th>Thru</th><th>Tee (ET)</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th></tr></thead>
       <tbody id="leaderboardBody"></tbody>
     </table>
   </div>
@@ -145,8 +145,8 @@
   <p style="font-size:0.7rem;color:#74c69d;margin-bottom:8px;">Full-field top 10 from the live Open Championship leaderboard. Golfers owned by a fantasy team are tagged.</p>
   <div style="overflow-x:auto">
     <table class="leaderboard-table" id="tournamentTable">
-      <thead><tr><th>Pos</th><th>Player</th><th>Score</th><th>Thru</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th></tr></thead>
-      <tbody id="tournamentBody"><tr><td colspan="8" style="text-align:center;color:#2d6a4f;padding:18px;">No data yet — hit Refresh once the tournament is underway.</td></tr></tbody>
+      <thead><tr><th>Pos</th><th>Player</th><th>Score</th><th>Thru</th><th>Tee (ET)</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th></tr></thead>
+      <tbody id="tournamentBody"><tr><td colspan="9" style="text-align:center;color:#2d6a4f;padding:18px;">No data yet — hit Refresh once the tournament is underway.</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -199,7 +199,7 @@ function openProfile(name) {
 // scores[name] = { score: number|null, pos: string, thru: string, r1,r2,r3,r4 }
 let scores = {};
 ALL_GOLFERS.forEach(g => {
-  scores[g] = { score: null, pos: "--", thru: "--", r1: "--", r2: "--", r3: "--", r4: "--" };
+  scores[g] = { score: null, pos: "--", thru: "--", tee: "--", r1: "--", r2: "--", r3: "--", r4: "--" };
 });
 
 let fullField = []; // top-of-field data from ESPN for the tournament view
@@ -315,7 +315,7 @@ function renderStandings() {
         ${nameHtml}
         <div class="golfer-score ${scls}">${stxt}</div>
         <div class="golfer-pos">${sc?.pos || '--'} ${isBest ? '⭐' : ''}</div>
-        <div class="golfer-thru">${sc?.thru ? 'Thru ' + sc.thru : ''}</div>`;
+        <div class="golfer-thru">${sc?.thru && sc.thru !== '--' ? 'Thru ' + sc.thru : (sc?.tee && sc.tee !== '--' ? sc.tee : '')}</div>`;
       gContainer.appendChild(slot);
     });
   });
@@ -350,6 +350,7 @@ function renderLeaderboard() {
       <td>${nameCell} ${owner ? `<span class="owner-badge ${isYours ? 'owner-you' : 'owner-other'}">${owner.name}</span>` : ''}</td>
       <td class="${cls}">${txt}</td>
       <td>${g.thru || '--'}</td>
+      <td>${g.tee || '--'}</td>
       <td>${g.r1 || '--'}</td>
       <td>${g.r2 || '--'}</td>
       <td>${g.r3 || '--'}</td>
@@ -454,6 +455,33 @@ async function fetchLiveScores() {
       return ls.displayValue ?? '--';
     }
 
+    // Upcoming tee time (in ET) for the next round a golfer hasn't started.
+    // Returns '' once they're mid-round (so the Thru column shows live progress
+    // instead) and returns '--' when there's no future tee time available.
+    function nextTee(c) {
+      const state = c.status?.type?.state;
+      // Mid-round → no tee time shown; the Thru column carries the live status.
+      if (state === 'in') return '';
+      const ls = c.linescores || [];
+      // Find the earliest round that has a teeTime but no recorded score yet.
+      for (let i = 0; i < ls.length; i++) {
+        const l = ls[i];
+        if (!l || !l.teeTime) continue;
+        const played = l.displayValue && l.displayValue !== '-';
+        if (!played) {
+          const d = new Date(l.teeTime);
+          if (isNaN(d)) continue;
+          // Only show if the tee time is still in the future.
+          if (d.getTime() < Date.now()) continue;
+          return d.toLocaleString('en-US', {
+            timeZone: 'America/New_York',
+            weekday: 'short', hour: 'numeric', minute: '2-digit'
+          }) + ' ET';
+        }
+      }
+      return '--';
+    }
+
     // Build full-field array for the tournament top-10 view
     fullField = competitors.map(c => {
       const linescores = c.linescores || [];
@@ -462,6 +490,7 @@ async function fetchLiveScores() {
         scoreVal: toPar(c),
         pos: c.status?.position?.displayName || '--',
         thru: (c.status?.displayThru ?? c.status?.thru ?? '--').toString(),
+        tee: nextTee(c),
         order: c.sortOrder ?? 9999,
         r1: roundDisp(linescores, 0),
         r2: roundDisp(linescores, 1),
@@ -502,6 +531,7 @@ async function fetchLiveScores() {
           score: toPar(c),
           pos: c.status?.position?.displayName || '--',
           thru: (c.status?.displayThru ?? c.status?.thru ?? '--').toString(),
+          tee: nextTee(c),
           r1: roundDisp(linescores, 0),
           r2: roundDisp(linescores, 1),
           r3: roundDisp(linescores, 2),
@@ -613,6 +643,7 @@ function renderTournament() {
       <td>${nameCell} ${ownerTag}</td>
       <td class="${scCls}">${scTxt}</td>
       <td>${g.thru || '--'}</td>
+      <td>${g.tee || '--'}</td>
       <td>${g.r1 || '--'}</td>
       <td>${g.r2 || '--'}</td>
       <td>${g.r3 || '--'}</td>
